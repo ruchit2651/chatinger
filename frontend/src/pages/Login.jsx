@@ -51,6 +51,7 @@ export default function Login() {
             toast.success('New code sent');
         } catch (err) {
             toast.error(err.message);
+            throw err;
         } finally {
             setResending(false);
         }

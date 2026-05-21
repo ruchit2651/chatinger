@@ -42,10 +42,14 @@ export default function OtpStep({
     };
 
     const handleResend = async () => {
-        await onResend();
-        setCooldown(30);
-        setCode('');
-        inputRef.current?.focus();
+        try {
+            await onResend();
+            setCooldown(30);
+            setCode('');
+            inputRef.current?.focus();
+        } catch {
+            // The parent shows the toast. Keep the resend button available.
+        }
     };
 
     return (

@@ -57,6 +57,7 @@ export default function Register() {
             toast.success('New code sent');
         } catch (err) {
             toast.error(err.message);
+            throw err;
         } finally {
             setResending(false);
         }

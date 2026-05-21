@@ -21,6 +21,17 @@ const PROFILE_COLUMNS =
     'id, username, email, birth_date, mobile_number, avatar_url, caption, created_at';
 
 const MAX_CAPTION_LEN = 200;
+const OTP_EMAIL_TIMEOUT_MS = 12_000;
+
+const sendOtpWithTimeout = ({ to, code, purpose }) => {
+    const timeout = new Promise((_, reject) => {
+        setTimeout(() => {
+            reject(new Error('Email service timed out. Try again in a moment.'));
+        }, OTP_EMAIL_TIMEOUT_MS);
+    });
+
+    return Promise.race([sendOtp({ to, code, purpose }), timeout]);
+};
 
 /**
  * POST /api/auth/register/request
@@ -95,10 +106,7 @@ exports.requestRegister = async (req, res, next) => {
             },
         });
 
-        sendOtp({ to: email, code, purpose: 'register' }).catch((err) => {
-            // eslint-disable-next-line no-console
-            console.error('Failed to send register OTP:', err.message);
-        });
+        await sendOtpWithTimeout({ to: email, code, purpose: 'register' });
 
         res.json({ ok: true, message: 'Verification code sent to your email' });
     } catch (err) {
@@ -182,10 +190,7 @@ exports.requestLogin = async (req, res, next) => {
 
         const code = otp.generate();
         await otp.create({ email, purpose: 'login', code });
-        sendOtp({ to: email, code, purpose: 'login' }).catch((err) => {
-            // eslint-disable-next-line no-console
-            console.error('Failed to send login OTP:', err.message);
-        });
+        await sendOtpWithTimeout({ to: email, code, purpose: 'login' });
 
         res.json({ ok: true, message: 'Verification code sent to your email' });
     } catch (err) {
