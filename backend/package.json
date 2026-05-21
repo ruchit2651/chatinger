@@ -17,7 +17,8 @@
     "jsonwebtoken": "^9.0.2",
     "multer": "^2.1.1",
     "nodemailer": "^8.0.7",
-    "socket.io": "^4.7.5"
+    "socket.io": "^4.7.5",
+    "ws": "^8.20.1"
   },
   "devDependencies": {
     "nodemon": "^3.1.4"
