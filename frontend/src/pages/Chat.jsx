@@ -82,12 +82,16 @@ export default function Chat() {
                 Notification.permission === 'granted'
             ) {
                 try {
-                    const title = msg.sender_username || 'New message';
+                    const sender = msg.sender_username || 'Someone';
+                    const title = `Chatinger · ${sender}`;
+                    const body = msg.message || (msg.attachment_url ? 'Sent an attachment' : '');
                     // Unique tag per message so notifications stack instead of replacing.
                     const notif = new Notification(title, {
-                        body: msg.message,
+                        body,
                         tag: `message:${msg.id}`,
                         renotify: true,
+                        icon: '/favicon.svg',
+                        badge: '/favicon.svg',
                     });
                     notif.onclick = () => {
                         window.focus();
