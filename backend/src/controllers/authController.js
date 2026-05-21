@@ -21,7 +21,9 @@ const PROFILE_COLUMNS =
     'id, username, email, birth_date, mobile_number, avatar_url, caption, created_at';
 
 const MAX_CAPTION_LEN = 200;
-const OTP_EMAIL_TIMEOUT_MS = 12_000;
+const OTP_EMAIL_TIMEOUT_MS = 8_000;
+
+const normalizeEmail = (raw) => String(raw || '').trim().toLowerCase();
 
 const sendOtpWithTimeout = ({ to, code, purpose }) => {
     const timeout = new Promise((_, reject) => {
@@ -41,13 +43,14 @@ const sendOtpWithTimeout = ({ to, code, purpose }) => {
  */
 exports.requestRegister = async (req, res, next) => {
     try {
-        const { username, email, password, birth_date, mobile_number, caption } = req.body || {};
-        if (!username || !email || !password) {
+        const { username, email: rawEmail, password, birth_date, mobile_number, caption } = req.body || {};
+        if (!username || !rawEmail || !password) {
             return res.status(400).json({ error: 'username, email and password are required' });
         }
         if (password.length < 6) {
             return res.status(400).json({ error: 'password must be at least 6 characters' });
         }
+        const email = normalizeEmail(rawEmail);
 
         let birthDateValue = null;
         if (birth_date) {
@@ -106,12 +109,15 @@ exports.requestRegister = async (req, res, next) => {
             },
         });
 
-        sendOtpWithTimeout({ to: email, code, purpose: 'register' }).catch((err) => {
+        try {
+            await sendOtpWithTimeout({ to: email, code, purpose: 'register' });
+        } catch (err) {
             // eslint-disable-next-line no-console
             console.error('Failed to send register OTP:', err.message);
             // eslint-disable-next-line no-console
             console.log(`[otp:fallback] register code for ${email}: ${code}`);
-        });
+            return res.status(502).json({ error: `Couldn't send the verification email: ${err.message}` });
+        }
 
         res.json({ ok: true, message: 'Verification code sent to your email' });
     } catch (err) {
@@ -126,10 +132,11 @@ exports.requestRegister = async (req, res, next) => {
  */
 exports.verifyRegister = async (req, res, next) => {
     try {
-        const { email, code } = req.body || {};
-        if (!email || !code) {
+        const { email: rawEmail, code } = req.body || {};
+        if (!rawEmail || !code) {
             return res.status(400).json({ error: 'email and code are required' });
         }
+        const email = normalizeEmail(rawEmail);
 
         const v = await otp.verify({ email, purpose: 'register', code });
         if (!v.ok) return res.status(v.status).json({ error: v.error });
@@ -177,10 +184,11 @@ exports.verifyRegister = async (req, res, next) => {
  */
 exports.requestLogin = async (req, res, next) => {
     try {
-        const { email, password } = req.body || {};
-        if (!email || !password) {
+        const { email: rawEmail, password } = req.body || {};
+        if (!rawEmail || !password) {
             return res.status(400).json({ error: 'email and password are required' });
         }
+        const email = normalizeEmail(rawEmail);
 
         const { data: user, error } = await supabase
             .from('users')
@@ -195,12 +203,16 @@ exports.requestLogin = async (req, res, next) => {
 
         const code = otp.generate();
         await otp.create({ email, purpose: 'login', code });
-        sendOtpWithTimeout({ to: email, code, purpose: 'login' }).catch((err) => {
+
+        try {
+            await sendOtpWithTimeout({ to: email, code, purpose: 'login' });
+        } catch (err) {
             // eslint-disable-next-line no-console
             console.error('Failed to send login OTP:', err.message);
             // eslint-disable-next-line no-console
             console.log(`[otp:fallback] login code for ${email}: ${code}`);
-        });
+            return res.status(502).json({ error: `Couldn't send the verification email: ${err.message}` });
+        }
 
         res.json({ ok: true, message: 'Verification code sent to your email' });
     } catch (err) {
@@ -214,10 +226,11 @@ exports.requestLogin = async (req, res, next) => {
  */
 exports.verifyLogin = async (req, res, next) => {
     try {
-        const { email, code } = req.body || {};
-        if (!email || !code) {
+        const { email: rawEmail, code } = req.body || {};
+        if (!rawEmail || !code) {
             return res.status(400).json({ error: 'email and code are required' });
         }
+        const email = normalizeEmail(rawEmail);
 
         const v = await otp.verify({ email, purpose: 'login', code });
         if (!v.ok) return res.status(v.status).json({ error: v.error });
