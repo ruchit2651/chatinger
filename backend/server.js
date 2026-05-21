@@ -15,6 +15,7 @@ const conversationRoutes = require('./src/routes/conversationRoutes');
 const messageRoutes = require('./src/routes/messageRoutes');
 const reactionRoutes = require('./src/routes/reactionRoutes');
 const uploadRoutes = require('./src/routes/uploadRoutes');
+const pushRoutes = require('./src/routes/pushRoutes');
 const errorHandler = require('./src/middleware/errorHandler');
 const registerSocket = require('./src/socket/socketHandler');
 
@@ -42,6 +43,7 @@ app.use('/api/conversations', conversationRoutes);
 app.use('/api/messages', messageRoutes);
 app.use('/api/reactions', reactionRoutes);
 app.use('/api/uploads', uploadRoutes);
+app.use('/api/push', pushRoutes);
 
 app.use(errorHandler);
 

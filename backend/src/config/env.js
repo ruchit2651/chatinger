@@ -32,4 +32,14 @@ module.exports = {
         process.env.EMAIL_SENDER_EMAIL || process.env.SMTP_USER || '',
     EMAIL_SENDER_NAME:
         process.env.EMAIL_SENDER_NAME || process.env.APP_NAME || 'Chatinger',
+
+    // Web Push (VAPID). Generate a keypair once with `node generate-vapid.js`
+    // and store the two halves here. Leave empty to disable push notifications.
+    VAPID_PUBLIC_KEY: process.env.VAPID_PUBLIC_KEY || '',
+    VAPID_PRIVATE_KEY: process.env.VAPID_PRIVATE_KEY || '',
+    VAPID_SUBJECT:
+        process.env.VAPID_SUBJECT ||
+        (process.env.EMAIL_SENDER_EMAIL
+            ? `mailto:${process.env.EMAIL_SENDER_EMAIL}`
+            : 'mailto:admin@example.com'),
 };

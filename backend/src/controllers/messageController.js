@@ -1,5 +1,6 @@
 const supabase = require('../config/supabase');
 const { assertParticipant } = require('./conversationController');
+const push = require('../utils/push');
 
 const MESSAGE_COLUMNS =
     'id, conversation_id, sender_id, message, is_read, created_at, ' +
@@ -117,6 +118,19 @@ exports.sendMessage = async (req, res, next) => {
                 .to(`user:${convo.user2_id}`)
                 .emit('receive_message', payload);
         }
+
+        // Fire a Web Push to the *other* participant so they get a notification
+        // even when the tab is closed. Fire-and-forget — the response shouldn't
+        // wait on the push services.
+        const recipientId = convo.user1_id === me ? convo.user2_id : convo.user1_id;
+        push.sendToUser(recipientId, {
+            title: `Chatinger · ${req.user.username}`,
+            body: text || (attachment_url ? 'Sent an attachment' : 'New message'),
+            conversation_id,
+            message_id: saved.id,
+        }).catch((err) => {
+            console.error('[push] dispatch failed:', err.message);
+        });
 
         res.status(201).json({ message: payload });
     } catch (err) {

@@ -11,6 +11,7 @@ import {
     unfavoriteConversation,
 } from '../api/conversations.js';
 import { playChime } from '../utils/sound.js';
+import { registerAndSubscribe } from '../utils/push.js';
 
 /**
  * Top-level chat layout: sidebar (conversations + people) and message pane.
@@ -42,12 +43,27 @@ export default function Chat() {
         })();
     }, []);
 
-    // Ask the browser for notification permission once per session.
+    // Register the service worker + Web Push subscription so the backend can
+    // deliver notifications even when the tab is closed. Idempotent.
     useEffect(() => {
-        if (typeof window === 'undefined' || !('Notification' in window)) return;
-        if (Notification.permission === 'default') {
-            Notification.requestPermission().catch(() => {});
-        }
+        registerAndSubscribe().catch((err) => {
+            console.warn('[push] subscribe failed:', err.message);
+        });
+    }, []);
+
+    // Service worker tells us which conversation to open when a push notification
+    // is clicked while the page is already open.
+    useEffect(() => {
+        if (typeof navigator === 'undefined' || !navigator.serviceWorker) return;
+        const onSwMessage = (event) => {
+            const data = event.data || {};
+            if (data.type === 'push:open-conversation' && data.conversation_id) {
+                setActiveId(data.conversation_id);
+                setSidebarOpen(false);
+            }
+        };
+        navigator.serviceWorker.addEventListener('message', onSwMessage);
+        return () => navigator.serviceWorker.removeEventListener('message', onSwMessage);
     }, []);
 
     // Reflect total unread count in the browser tab title, e.g. "(3) Chatinger".
@@ -73,36 +89,10 @@ export default function Chat() {
             // Chime on every inbound message.
             if (isInbound) playChime();
 
-            // Desktop notification on every inbound message — fires regardless of
-            // whether the chat is open and focused, so each one lands in the OS
-            // notification area (Windows Action Center / macOS Notification Center).
-            if (
-                isInbound &&
-                'Notification' in window &&
-                Notification.permission === 'granted'
-            ) {
-                try {
-                    const sender = msg.sender_username || 'Someone';
-                    const title = `Chatinger · ${sender}`;
-                    const body = msg.message || (msg.attachment_url ? 'Sent an attachment' : '');
-                    // Unique tag per message so notifications stack instead of replacing.
-                    const notif = new Notification(title, {
-                        body,
-                        tag: `message:${msg.id}`,
-                        renotify: true,
-                        icon: '/favicon.svg',
-                        badge: '/favicon.svg',
-                    });
-                    notif.onclick = () => {
-                        window.focus();
-                        setActiveId(msg.conversation_id);
-                        setSidebarOpen(false);
-                        notif.close();
-                    };
-                } catch {
-                    // Some browsers throw if used outside a user gesture; ignore.
-                }
-            }
+            // Desktop / mobile notifications are now delivered by the service
+            // worker via Web Push (see public/sw.js) so they fire even when the
+            // tab is closed. When the tab is open and focused, the SW suppresses
+            // them and we rely on the chime + unread badge instead.
 
             setConversations((prev) => {
                 let found = false;
