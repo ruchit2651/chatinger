@@ -106,7 +106,10 @@ exports.requestRegister = async (req, res, next) => {
             },
         });
 
-        await sendOtpWithTimeout({ to: email, code, purpose: 'register' });
+        sendOtpWithTimeout({ to: email, code, purpose: 'register' }).catch((err) => {
+            // eslint-disable-next-line no-console
+            console.error('Failed to send register OTP:', err.message);
+        });
 
         res.json({ ok: true, message: 'Verification code sent to your email' });
     } catch (err) {
@@ -190,7 +193,10 @@ exports.requestLogin = async (req, res, next) => {
 
         const code = otp.generate();
         await otp.create({ email, purpose: 'login', code });
-        await sendOtpWithTimeout({ to: email, code, purpose: 'login' });
+        sendOtpWithTimeout({ to: email, code, purpose: 'login' }).catch((err) => {
+            // eslint-disable-next-line no-console
+            console.error('Failed to send login OTP:', err.message);
+        });
 
         res.json({ ok: true, message: 'Verification code sent to your email' });
     } catch (err) {

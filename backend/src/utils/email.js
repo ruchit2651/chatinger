@@ -1,17 +1,23 @@
 const nodemailer = require('nodemailer');
+const dns = require('dns').promises;
 const env = require('../config/env');
 
 let transporter = null;
 
-function getTransporter() {
+async function getTransporter() {
     if (transporter) return transporter;
     if (!env.SMTP_USER || !env.SMTP_PASS) return null;
+    const ipv4Hosts = await dns.resolve4(env.SMTP_HOST);
+    const smtpHost = ipv4Hosts[0] || env.SMTP_HOST;
     transporter = nodemailer.createTransport({
-        host: env.SMTP_HOST,
+        host: smtpHost,
         port: env.SMTP_PORT,
         secure: env.SMTP_PORT === 465,
         auth: { user: env.SMTP_USER, pass: env.SMTP_PASS },
         family: 4,
+        tls: {
+            servername: env.SMTP_HOST,
+        },
         connectionTimeout: 10_000,
         greetingTimeout: 10_000,
         socketTimeout: 15_000,
@@ -25,7 +31,7 @@ function getTransporter() {
  * from the server log.
  */
 async function send({ to, subject, html, text }) {
-    const t = getTransporter();
+    const t = await getTransporter();
     if (!t) {
         // eslint-disable-next-line no-console
         console.log(
