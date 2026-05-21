@@ -12,6 +12,7 @@ import {
 } from '../api/conversations.js';
 import { playChime } from '../utils/sound.js';
 import { registerAndSubscribe } from '../utils/push.js';
+import NotificationPrompt from '../components/NotificationPrompt.jsx';
 
 /**
  * Top-level chat layout: sidebar (conversations + people) and message pane.
@@ -43,11 +44,16 @@ export default function Chat() {
         })();
     }, []);
 
-    // Register the service worker + Web Push subscription so the backend can
-    // deliver notifications even when the tab is closed. Idempotent.
+    // If notification permission was already granted on a previous visit,
+    // silently re-subscribe so a new device install or VAPID rotation gets
+    // picked up. When permission is still 'default' we don't auto-prompt —
+    // the NotificationPrompt banner offers an explicit click-to-enable button
+    // so the request always happens inside a user gesture.
     useEffect(() => {
+        if (typeof Notification === 'undefined') return;
+        if (Notification.permission !== 'granted') return;
         registerAndSubscribe().catch((err) => {
-            console.warn('[push] subscribe failed:', err.message);
+            console.warn('[push] auto re-subscribe failed:', err.message);
         });
     }, []);
 
@@ -207,7 +213,9 @@ export default function Chat() {
     }, []);
 
     return (
-        <div className="h-full flex bg-slate-100 dark:bg-slate-900">
+        <div className="h-full flex flex-col bg-slate-100 dark:bg-slate-900">
+            <NotificationPrompt />
+            <div className="flex-1 flex min-h-0">
             <Sidebar
                 me={user}
                 conversations={conversations}
@@ -252,6 +260,7 @@ export default function Chat() {
                     <EmptyState onOpenSidebar={() => setSidebarOpen(true)} />
                 )}
             </main>
+            </div>
         </div>
     );
 }
