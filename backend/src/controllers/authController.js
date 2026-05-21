@@ -109,6 +109,8 @@ exports.requestRegister = async (req, res, next) => {
         sendOtpWithTimeout({ to: email, code, purpose: 'register' }).catch((err) => {
             // eslint-disable-next-line no-console
             console.error('Failed to send register OTP:', err.message);
+            // eslint-disable-next-line no-console
+            console.log(`[otp:fallback] register code for ${email}: ${code}`);
         });
 
         res.json({ ok: true, message: 'Verification code sent to your email' });
@@ -196,6 +198,8 @@ exports.requestLogin = async (req, res, next) => {
         sendOtpWithTimeout({ to: email, code, purpose: 'login' }).catch((err) => {
             // eslint-disable-next-line no-console
             console.error('Failed to send login OTP:', err.message);
+            // eslint-disable-next-line no-console
+            console.log(`[otp:fallback] login code for ${email}: ${code}`);
         });
 
         res.json({ ok: true, message: 'Verification code sent to your email' });
