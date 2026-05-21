@@ -23,14 +23,13 @@ module.exports = {
     SUPABASE_URL: process.env.SUPABASE_URL,
     SUPABASE_SERVICE_KEY: process.env.SUPABASE_SERVICE_KEY,
 
-    // Email (Gmail SMTP). All optional — if SMTP_USER isn't set, the email
-    // module logs the OTP to the server console instead of sending so dev
-    // still works without filling these in.
-    SMTP_HOST: process.env.SMTP_HOST || 'smtp.gmail.com',
-    SMTP_PORT: Number(process.env.SMTP_PORT) || 465,
-    SMTP_USER: process.env.SMTP_USER || '',
-    SMTP_PASS: process.env.SMTP_PASS || '',
-    EMAIL_FROM:
-        process.env.EMAIL_FROM ||
-        (process.env.SMTP_USER ? `Chatinger <${process.env.SMTP_USER}>` : ''),
+    // Email — Brevo HTTPS API (https://www.brevo.com). We use HTTP rather
+    // than SMTP because Render blocks outbound SMTP. If BREVO_API_KEY is
+    // empty, the email module logs OTPs to the server console instead so
+    // local dev still works without credentials.
+    BREVO_API_KEY: process.env.BREVO_API_KEY || '',
+    EMAIL_SENDER_EMAIL:
+        process.env.EMAIL_SENDER_EMAIL || process.env.SMTP_USER || '',
+    EMAIL_SENDER_NAME:
+        process.env.EMAIL_SENDER_NAME || process.env.APP_NAME || 'Chatinger',
 };

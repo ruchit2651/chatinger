@@ -1,62 +1,57 @@
-const nodemailer = require('nodemailer');
 const env = require('../config/env');
 
-let transporter = null;
-let verifyPromise = null;
-
-async function getTransporter() {
-    if (transporter) return transporter;
-    if (!env.SMTP_USER || !env.SMTP_PASS) return null;
-
-    // Gmail app passwords are displayed as "xxxx xxxx xxxx xxxx" but the
-    // whitespace breaks SASL auth in some setups — strip it.
-    const pass = env.SMTP_PASS.replace(/\s+/g, '');
-
-    transporter = nodemailer.createTransport({
-        host: env.SMTP_HOST,
-        port: env.SMTP_PORT,
-        secure: env.SMTP_PORT === 465,
-        auth: { user: env.SMTP_USER, pass },
-        family: 4,
-        connectionTimeout: 10_000,
-        greetingTimeout: 10_000,
-        socketTimeout: 15_000,
-    });
-
-    // Surface auth/connection errors once, on first use, instead of hiding
-    // them behind every per-send catch.
-    verifyPromise = transporter.verify().then(
-        () => { console.log(`[email] SMTP ready (${env.SMTP_HOST}:${env.SMTP_PORT} as ${env.SMTP_USER})`); },
-        (err) => { console.error('[email] SMTP verify failed:', err.message); }
-    );
-
-    return transporter;
-}
+const BREVO_ENDPOINT = 'https://api.brevo.com/v3/smtp/email';
 
 /**
- * Send an email. If SMTP isn't configured, logs to console so local dev
- * still works without filling in credentials — the OTP is recoverable
- * from the server log.
+ * Send an email via Brevo's HTTPS API. We use HTTP rather than SMTP because
+ * Render blocks outbound SMTP connections — only HTTPS gets out.
+ *
+ * If BREVO_API_KEY isn't set, falls back to logging the email to the console
+ * so local dev works without credentials (the OTP is recoverable from the log).
  */
 async function send({ to, subject, html, text }) {
-    const t = await getTransporter();
-    if (!t) {
-        // eslint-disable-next-line no-console
+    if (!env.BREVO_API_KEY) {
         console.log(
-            `\n[email:devmode] SMTP not configured. Would have sent:\n` +
+            `\n[email:devmode] BREVO_API_KEY not set. Would have sent:\n` +
             `  to:      ${to}\n` +
             `  subject: ${subject}\n` +
             `  text:    ${text}\n`
         );
         return { devMode: true };
     }
-    return t.sendMail({
-        from: env.EMAIL_FROM,
-        to,
+
+    const payload = {
+        sender: { name: env.EMAIL_SENDER_NAME, email: env.EMAIL_SENDER_EMAIL },
+        to: [{ email: to }],
         subject,
-        html,
-        text,
-    });
+        htmlContent: html,
+        textContent: text,
+    };
+
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 15_000);
+
+    let resp;
+    try {
+        resp = await fetch(BREVO_ENDPOINT, {
+            method: 'POST',
+            headers: {
+                'api-key': env.BREVO_API_KEY,
+                'accept': 'application/json',
+                'content-type': 'application/json',
+            },
+            body: JSON.stringify(payload),
+            signal: controller.signal,
+        });
+    } finally {
+        clearTimeout(timeoutId);
+    }
+
+    const body = await resp.text();
+    if (!resp.ok) {
+        throw new Error(`Brevo ${resp.status}: ${body}`);
+    }
+    return body ? JSON.parse(body) : {};
 }
 
 const APP = env.APP_NAME;
@@ -103,7 +98,7 @@ exports.sendOtp = async ({ to, code, purpose }) => {
 };
 
 exports.sendWelcome = async ({ to, username }) => {
-    const subject = `Welcome to ${APP}, ${username}! 🎉`;
+    const subject = `Welcome to ${APP}, ${username}!`;
     const html = wrap(`
         <p style="margin:0 0 8px;font-size:18px"><strong>Welcome aboard, ${username}!</strong></p>
         <p style="margin:0 0 16px;color:#475569">
