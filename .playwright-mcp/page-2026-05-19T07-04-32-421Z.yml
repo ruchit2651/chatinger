@@ -1,0 +1,18 @@
+- generic [ref=e4]:
+  - generic [ref=e5]:
+    - heading "Create account" [level=1] [ref=e6]
+    - paragraph [ref=e7]: Start chatting in seconds
+  - generic [ref=e8]:
+    - text: Username
+    - textbox [ref=e9]
+  - generic [ref=e10]:
+    - text: Email
+    - textbox [ref=e11]
+  - generic [ref=e12]:
+    - text: Password
+    - textbox [ref=e13]
+  - button "Create account" [ref=e14] [cursor=pointer]
+  - paragraph [ref=e15]:
+    - text: Already have an account?
+    - link "Sign in" [ref=e16] [cursor=pointer]:
+      - /url: /login

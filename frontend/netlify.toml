@@ -1,0 +1,19 @@
+# Netlify build config for the Vite + React frontend.
+#
+# To deploy: push to GitHub, then on Netlify:
+#   Add new site → Import from Git → pick repo → base directory: frontend
+#   Build command + publish dir are picked up from this file automatically.
+
+[build]
+    base    = "frontend"
+    command = "npm run build"
+    publish = "frontend/dist"
+
+[build.environment]
+    NODE_VERSION = "20"
+
+# SPA fallback — every route returns index.html so React Router can handle it.
+[[redirects]]
+    from   = "/*"
+    to     = "/index.html"
+    status = 200

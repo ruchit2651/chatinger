@@ -1,0 +1,48 @@
+# Render Blueprint — backend "Web Service" on the free plan.
+# https://render.com/docs/blueprint-spec
+#
+# Free tier notes:
+#   * Spins down after ~15 min of inactivity. First request after a sleep
+#     takes 30-60 s while it wakes up.
+#   * 750 free hours/month (more than enough for one always-on service).
+#   * Supports websockets natively, so Socket.IO works without changes.
+#
+# To deploy: push this file at the repo root to GitHub, then on Render:
+#   New → Blueprint → connect repo → Apply.
+# Fill in the `sync: false` env vars in the Render dashboard once the
+# service exists (they aren't committed to git).
+
+services:
+  - type: web
+    name: chatinger-backend
+    runtime: node
+    plan: free
+    rootDir: backend
+    buildCommand: npm install
+    startCommand: npm start
+    healthCheckPath: /health
+    envVars:
+      - key: NODE_VERSION
+        value: 20
+      - key: APP_NAME
+        value: Chatinger
+      # Render injects PORT automatically; the app already reads it.
+      # Fill these in via the Render dashboard (do NOT commit secrets):
+      - key: CLIENT_URL
+        sync: false   # e.g. https://chatinger.netlify.app
+      - key: JWT_SECRET
+        sync: false
+      - key: SUPABASE_URL
+        sync: false
+      - key: SUPABASE_SERVICE_KEY
+        sync: false
+      - key: SMTP_HOST
+        value: smtp.gmail.com
+      - key: SMTP_PORT
+        value: 465
+      - key: SMTP_USER
+        sync: false
+      - key: SMTP_PASS
+        sync: false
+      - key: EMAIL_FROM
+        sync: false

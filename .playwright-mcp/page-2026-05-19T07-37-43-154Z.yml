@@ -1,0 +1,31 @@
+- generic [ref=e15]:
+  - complementary [ref=e16]:
+    - generic [ref=e17]:
+      - generic [ref=e19]: A
+      - generic [ref=e21]:
+        - paragraph [ref=e22]: alice
+        - paragraph [ref=e23]: alice@example.com
+      - button "Logout" [ref=e24] [cursor=pointer]
+    - generic [ref=e25]:
+      - textbox "Search..." [ref=e26]
+      - button "+ Start new chat" [ref=e27] [cursor=pointer]
+    - list [ref=e29]:
+      - listitem [ref=e30]:
+        - button "B bob 1:01 PM hey bob, this is the smoke test" [active] [ref=e31] [cursor=pointer]:
+          - generic [ref=e33]: B
+          - generic [ref=e34]:
+            - generic [ref=e35]:
+              - paragraph [ref=e36]: bob
+              - generic [ref=e37]: 1:01 PM
+            - paragraph [ref=e39]: hey bob, this is the smoke test
+  - main [ref=e40]:
+    - generic [ref=e51]:
+      - generic [ref=e52]:
+        - generic [ref=e54]: B
+        - generic [ref=e55]:
+          - paragraph [ref=e56]: bob
+          - paragraph [ref=e57]: Offline
+      - generic [ref=e59]: Loading messages...
+      - generic [ref=e60]:
+        - textbox "Type a message..." [ref=e61]
+        - button "Send" [disabled] [ref=e62]: →

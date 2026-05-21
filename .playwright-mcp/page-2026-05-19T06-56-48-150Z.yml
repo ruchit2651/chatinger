@@ -1,0 +1,15 @@
+- generic [ref=e4]:
+  - generic [ref=e5]:
+    - heading "Sign in" [level=1] [ref=e6]
+    - paragraph [ref=e7]: Welcome back to the chat
+  - generic [ref=e8]:
+    - text: Email
+    - textbox [ref=e9]
+  - generic [ref=e10]:
+    - text: Password
+    - textbox [ref=e11]
+  - button "Sign in" [ref=e12] [cursor=pointer]
+  - paragraph [ref=e13]:
+    - text: No account?
+    - link "Create one" [ref=e14] [cursor=pointer]:
+      - /url: /register
