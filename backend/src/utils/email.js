@@ -1,27 +1,35 @@
 const nodemailer = require('nodemailer');
-const dns = require('dns').promises;
 const env = require('../config/env');
 
 let transporter = null;
+let verifyPromise = null;
 
 async function getTransporter() {
     if (transporter) return transporter;
     if (!env.SMTP_USER || !env.SMTP_PASS) return null;
-    const ipv4Hosts = await dns.resolve4(env.SMTP_HOST);
-    const smtpHost = ipv4Hosts[0] || env.SMTP_HOST;
+
+    // Gmail app passwords are displayed as "xxxx xxxx xxxx xxxx" but the
+    // whitespace breaks SASL auth in some setups — strip it.
+    const pass = env.SMTP_PASS.replace(/\s+/g, '');
+
     transporter = nodemailer.createTransport({
-        host: smtpHost,
+        host: env.SMTP_HOST,
         port: env.SMTP_PORT,
         secure: env.SMTP_PORT === 465,
-        auth: { user: env.SMTP_USER, pass: env.SMTP_PASS },
+        auth: { user: env.SMTP_USER, pass },
         family: 4,
-        tls: {
-            servername: env.SMTP_HOST,
-        },
         connectionTimeout: 10_000,
         greetingTimeout: 10_000,
         socketTimeout: 15_000,
     });
+
+    // Surface auth/connection errors once, on first use, instead of hiding
+    // them behind every per-send catch.
+    verifyPromise = transporter.verify().then(
+        () => { console.log(`[email] SMTP ready (${env.SMTP_HOST}:${env.SMTP_PORT} as ${env.SMTP_USER})`); },
+        (err) => { console.error('[email] SMTP verify failed:', err.message); }
+    );
+
     return transporter;
 }
 
