@@ -1,0 +1,15 @@
+# Netlify config for the Vite frontend in this monorepo.
+# Keep this file at the repo root so Netlify finds it before building.
+
+[build]
+  base = "frontend"
+  command = "npm run build"
+  publish = "dist"
+
+[build.environment]
+  NODE_VERSION = "20"
+
+[[redirects]]
+  from = "/*"
+  to = "/index.html"
+  status = 200
