@@ -404,6 +404,7 @@ function Attachment({ message, mine }) {
     const type = message.attachment_type || '';
     const name = message.attachment_name || 'download';
     const isImage = type.startsWith('image/');
+    const isVideo = type.startsWith('video/');
 
     const handleDownload = (e) => {
         e.preventDefault();
@@ -426,6 +427,28 @@ function Attachment({ message, mine }) {
                     onClick={handleDownload}
                     title="Download"
                     aria-label="Download image"
+                    className="absolute top-2 right-2 bg-black/55 hover:bg-black/75 text-white rounded-full w-8 h-8 flex items-center justify-center text-sm opacity-0 group-hover/att:opacity-100 focus:opacity-100 transition"
+                >
+                    ⬇
+                </button>
+            </div>
+        );
+    }
+    if (isVideo) {
+        return (
+            <div className="relative group/att mb-1">
+                <video
+                    src={url}
+                    controls
+                    preload="metadata"
+                    playsInline
+                    className="max-h-48 sm:max-h-60 md:max-h-72 max-w-full w-auto rounded-lg bg-black"
+                />
+                <button
+                    type="button"
+                    onClick={handleDownload}
+                    title="Download"
+                    aria-label="Download video"
                     className="absolute top-2 right-2 bg-black/55 hover:bg-black/75 text-white rounded-full w-8 h-8 flex items-center justify-center text-sm opacity-0 group-hover/att:opacity-100 focus:opacity-100 transition"
                 >
                     ⬇

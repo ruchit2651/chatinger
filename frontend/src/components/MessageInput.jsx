@@ -147,6 +147,13 @@ export default function MessageInput({
                 <div className="px-4 py-2 border-b border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-700/40 flex items-center gap-2">
                     {attachment.type?.startsWith('image/') ? (
                         <img src={attachment.url} alt={attachment.name} className="h-12 w-12 object-cover rounded" />
+                    ) : attachment.type?.startsWith('video/') ? (
+                        <video
+                            src={attachment.url}
+                            className="h-12 w-12 object-cover rounded bg-black"
+                            muted
+                            playsInline
+                        />
                     ) : (
                         <span className="text-xl">📎</span>
                     )}
@@ -198,7 +205,7 @@ export default function MessageInput({
                     type="file"
                     onChange={handleFile}
                     className="hidden"
-                    accept="image/*,application/pdf,.doc,.docx,.txt,.zip"
+                    accept="image/*,video/*,application/pdf,.doc,.docx,.txt,.zip"
                 />
                 <button
                     type="button"
