@@ -4,6 +4,7 @@ import MessageBubble from './MessageBubble.jsx';
 import MessageInput from './MessageInput.jsx';
 import TypingIndicator from './TypingIndicator.jsx';
 import Avatar from './Avatar.jsx';
+import ConfirmDialog from './ConfirmDialog.jsx';
 import { useAuth } from '../context/AuthContext.jsx';
 import { useSocket } from '../context/SocketContext.jsx';
 import {
@@ -37,6 +38,9 @@ export default function ChatWindow({
     const [replyTo, setReplyTo]   = useState(null);   // message being replied to
     const [scrolledUp, setScrolledUp] = useState(false);
     const [newCount, setNewCount]     = useState(0);  // unread arrivals while scrolled up
+    const [selectedIds, setSelectedIds]   = useState(() => new Set());
+    const [bulkDeleteOpen, setBulkDeleteOpen] = useState(false);
+    const selectionMode = selectedIds.size > 0;
 
     const scrollRef = useRef(null);
     const typingTimerRef = useRef(null);
@@ -211,7 +215,106 @@ export default function ChatWindow({
         stickToBottomRef.current = true;
         setScrolledUp(false);
         setNewCount(0);
+        setSelectedIds(new Set());
     }, [conversationId]);
+
+    // ESC exits selection mode.
+    useEffect(() => {
+        if (!selectionMode) return;
+        const onKey = (e) => {
+            if (e.key === 'Escape') setSelectedIds(new Set());
+        };
+        document.addEventListener('keydown', onKey);
+        return () => document.removeEventListener('keydown', onKey);
+    }, [selectionMode]);
+
+    const startSelection = useCallback((id) => {
+        setSelectedIds(new Set([id]));
+    }, []);
+
+    const toggleSelected = useCallback((id) => {
+        setSelectedIds((prev) => {
+            const next = new Set(prev);
+            if (next.has(id)) next.delete(id);
+            else next.add(id);
+            return next;
+        });
+    }, []);
+
+    const exitSelection = useCallback(() => {
+        setSelectedIds(new Set());
+    }, []);
+
+    // Count of selected messages that are mine and not already deleted — only
+    // these are eligible for bulk delete.
+    const deletableCount = useMemo(() => {
+        let n = 0;
+        for (const m of messages) {
+            if (selectedIds.has(m.id) && m.sender_id === user.id && !m.deleted_at) n++;
+        }
+        return n;
+    }, [messages, selectedIds, user.id]);
+
+    const handleBulkShare = useCallback(async () => {
+        // Preserve message order in the chat, not click order.
+        const blocks = messages
+            .filter((m) => selectedIds.has(m.id) && !m.deleted_at)
+            .map((m) => {
+                const lines = [];
+                if (m.message) lines.push(m.message);
+                if (m.attachment_url) {
+                    const label = m.attachment_name || 'Attachment';
+                    lines.push(`${label}: ${m.attachment_url}`);
+                }
+                return lines.join('\n');
+            })
+            .filter(Boolean);
+
+        const text = blocks.join('\n\n---\n\n');
+        if (!text) return;
+
+        if (navigator.share) {
+            try {
+                await navigator.share({ text });
+                exitSelection();
+                return;
+            } catch (err) {
+                if (err?.name === 'AbortError') return;
+            }
+        }
+
+        try {
+            await navigator.clipboard.writeText(text);
+            toast.success(`Copied ${blocks.length} message${blocks.length === 1 ? '' : 's'}`);
+            exitSelection();
+        } catch {
+            toast.error('Sharing not supported on this device');
+        }
+    }, [messages, selectedIds, exitSelection]);
+
+    const handleBulkDelete = useCallback(async () => {
+        setBulkDeleteOpen(false);
+        const ids = messages
+            .filter((m) => selectedIds.has(m.id) && m.sender_id === user.id && !m.deleted_at)
+            .map((m) => m.id);
+        if (ids.length === 0) return;
+        try {
+            const results = await Promise.allSettled(ids.map((id) => deleteMessage(id)));
+            const updates = new Map();
+            results.forEach((r, i) => {
+                if (r.status === 'fulfilled') updates.set(ids[i], r.value);
+            });
+            setMessages((prev) =>
+                prev.map((m) => (updates.has(m.id) ? { ...m, ...updates.get(m.id) } : m))
+            );
+            const failed = results.filter((r) => r.status === 'rejected').length;
+            if (failed > 0) toast.error(`${failed} message${failed === 1 ? '' : 's'} couldn't be deleted`);
+            else toast.success(`Deleted ${ids.length}`);
+            exitSelection();
+        } catch (err) {
+            toast.error(err.message);
+        }
+    }, [messages, selectedIds, user.id, exitSelection]);
 
     const handleSend = useCallback(
         async (text, extra = {}) => {
@@ -278,26 +381,61 @@ export default function ChatWindow({
 
     return (
         <div className="flex-1 flex flex-col bg-slate-50 dark:bg-slate-900 min-w-0">
-            {/* Header */}
+            {/* Header — swaps to a selection toolbar while messages are selected */}
             <header className="px-4 py-3 bg-white dark:bg-slate-800 border-b border-slate-200 dark:border-slate-700 flex items-center gap-3 shadow-sm">
-                <button
-                    onClick={onOpenSidebar}
-                    className="md:hidden text-slate-600 dark:text-slate-300 hover:text-slate-900 dark:hover:text-white px-2 -ml-2"
-                    aria-label="Open sidebar"
-                >
-                    ☰
-                </button>
-                <Avatar
-                    name={other.username}
-                    imageUrl={other.avatar_url}
-                    online={isOtherOnline}
-                />
-                <div className="min-w-0">
-                    <p className="font-semibold text-slate-800 dark:text-slate-100 truncate">{other.username}</p>
-                    <p className="text-xs text-slate-500 dark:text-slate-400 truncate">
-                        {other.caption || (isOtherOnline ? 'Online' : 'Offline')}
-                    </p>
-                </div>
+                {selectionMode ? (
+                    <>
+                        <button
+                            onClick={exitSelection}
+                            className="text-slate-600 dark:text-slate-300 hover:text-slate-900 dark:hover:text-white px-2 -ml-2 text-xl leading-none"
+                            aria-label="Cancel selection"
+                            title="Cancel"
+                        >
+                            ×
+                        </button>
+                        <p className="flex-1 font-semibold text-slate-800 dark:text-slate-100">
+                            {selectedIds.size} selected
+                        </p>
+                        <button
+                            onClick={handleBulkShare}
+                            className="w-9 h-9 rounded-full flex items-center justify-center text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-700 transition"
+                            aria-label="Share selected"
+                            title="Share"
+                        >
+                            <span className="text-lg leading-none">⤴</span>
+                        </button>
+                        <button
+                            onClick={() => setBulkDeleteOpen(true)}
+                            disabled={deletableCount === 0}
+                            className="w-9 h-9 rounded-full flex items-center justify-center text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/30 disabled:opacity-40 disabled:hover:bg-transparent disabled:cursor-not-allowed transition"
+                            aria-label="Delete selected"
+                            title={deletableCount === 0 ? 'You can only delete your own messages' : `Delete ${deletableCount}`}
+                        >
+                            <span className="text-base leading-none">🗑</span>
+                        </button>
+                    </>
+                ) : (
+                    <>
+                        <button
+                            onClick={onOpenSidebar}
+                            className="md:hidden text-slate-600 dark:text-slate-300 hover:text-slate-900 dark:hover:text-white px-2 -ml-2"
+                            aria-label="Open sidebar"
+                        >
+                            ☰
+                        </button>
+                        <Avatar
+                            name={other.username}
+                            imageUrl={other.avatar_url}
+                            online={isOtherOnline}
+                        />
+                        <div className="min-w-0">
+                            <p className="font-semibold text-slate-800 dark:text-slate-100 truncate">{other.username}</p>
+                            <p className="text-xs text-slate-500 dark:text-slate-400 truncate">
+                                {other.caption || (isOtherOnline ? 'Online' : 'Offline')}
+                            </p>
+                        </div>
+                    </>
+                )}
             </header>
 
             {/* Messages */}
@@ -335,6 +473,10 @@ export default function ChatWindow({
                                 onReply={(msg) => setReplyTo(msg)}
                                 onReact={handleReact}
                                 onJumpTo={handleJumpTo}
+                                selectionMode={selectionMode}
+                                selected={selectedIds.has(m.id)}
+                                onStartSelect={startSelection}
+                                onToggleSelect={toggleSelected}
                             />
                         </div>
                     ))
@@ -368,6 +510,20 @@ export default function ChatWindow({
                 replyTo={replyTo}
                 onCancelReply={() => setReplyTo(null)}
                 conversationId={conversationId}
+            />
+
+            <ConfirmDialog
+                open={bulkDeleteOpen}
+                title={`Delete ${deletableCount} message${deletableCount === 1 ? '' : 's'}?`}
+                message={
+                    deletableCount < selectedIds.size
+                        ? "You can only delete messages you sent — the rest will be skipped."
+                        : "This can't be undone."
+                }
+                confirmLabel="Delete"
+                danger
+                onCancel={() => setBulkDeleteOpen(false)}
+                onConfirm={handleBulkDelete}
             />
         </div>
     );

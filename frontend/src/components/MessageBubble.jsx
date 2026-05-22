@@ -23,6 +23,10 @@ export default function MessageBubble({
     onReply,
     onReact,
     onJumpTo,
+    selectionMode = false,
+    selected = false,
+    onStartSelect,
+    onToggleSelect,
 }) {
     const [menuOpen, setMenuOpen]     = useState(false);
     const [editing, setEditing]       = useState(false);
@@ -138,21 +142,44 @@ export default function MessageBubble({
     const reactionList = Object.values(reactionGroups);
 
     const handleContextMenu = (e) => {
-        // Right-click on a message = quick reply. Skip on deleted messages
-        // and while inline-editing so users can still right-click the textarea.
-        if (isDeleted || editing) return;
+        // Right-click on a message = quick reply. Skip on deleted messages,
+        // while inline-editing (so users can right-click the textarea), and
+        // during multi-select (right-click would be confusing there).
+        if (isDeleted || editing || selectionMode) return;
         e.preventDefault();
         onReply?.(message);
     };
 
+    const handleRowClick = (e) => {
+        if (!selectionMode) return;
+        // Don't hijack clicks on inner links / buttons (attachment preview, etc).
+        const t = e.target;
+        if (t.closest('a, button, textarea, input')) return;
+        e.preventDefault();
+        onToggleSelect?.(message.id);
+    };
+
     return (
         <div
-            className={`group flex ${mine ? 'justify-end' : 'justify-start'} px-1`}
+            className={`group flex ${mine ? 'justify-end' : 'justify-start'} px-1 ${
+                selectionMode ? 'cursor-pointer' : ''
+            } ${selected ? 'bg-brand-50 dark:bg-brand-900/20 rounded-lg' : ''}`}
             onContextMenu={handleContextMenu}
+            onClick={handleRowClick}
         >
             <div className="relative max-w-[78%] md:max-w-[60%]">
+                {/* Selection check — shows whenever the bubble is selected */}
+                {selected && (
+                    <div
+                        className={`absolute -top-1.5 ${mine ? '-left-1.5' : '-right-1.5'} w-5 h-5 rounded-full bg-brand-600 text-white text-[11px] flex items-center justify-center shadow ring-2 ring-white dark:ring-slate-900 z-10`}
+                        aria-hidden="true"
+                    >
+                        ✓
+                    </div>
+                )}
+
                 {/* Hover menu — sits above the bubble */}
-                {!isDeleted && !editing && (
+                {!isDeleted && !editing && !selectionMode && (
                     <div
                         ref={menuRef}
                         className={`absolute -top-3 ${mine ? 'right-1' : 'left-1'} opacity-0 group-hover:opacity-100 focus-within:opacity-100 transition flex items-center gap-1 z-10`}
@@ -222,11 +249,18 @@ export default function MessageBubble({
                                         Download
                                     </button>
                                 )}
+                                <button
+                                    onClick={() => {
+                                        setMenuOpen(false);
+                                        onStartSelect?.(message.id);
+                                    }}
+                                    className="block w-full text-left px-3 py-1.5 hover:bg-slate-50 dark:hover:bg-slate-600 text-slate-700 dark:text-slate-200 whitespace-nowrap"
+                                >
+                                    Select
+                                </button>
                                 {mine && (
                                     <>
-                                        {(canShare || canCopy || canDownload) && (
-                                            <div className="h-px bg-slate-200 dark:bg-slate-600" />
-                                        )}
+                                        <div className="h-px bg-slate-200 dark:bg-slate-600" />
                                         <button
                                             onClick={startEdit}
                                             className="block w-full text-left px-3 py-1.5 hover:bg-slate-50 dark:hover:bg-slate-600 text-slate-700 dark:text-slate-200 whitespace-nowrap"
