@@ -13,6 +13,7 @@ import {
 import { playChime } from '../utils/sound.js';
 import { registerAndSubscribe } from '../utils/push.js';
 import NotificationPrompt from '../components/NotificationPrompt.jsx';
+import ConfirmDialog from '../components/ConfirmDialog.jsx';
 
 /**
  * Top-level chat layout: sidebar (conversations + people) and message pane.
@@ -27,6 +28,9 @@ export default function Chat() {
     const [activeId, setActiveId]           = useState(null);
     const [sidebarOpen, setSidebarOpen]     = useState(true);
     const [loading, setLoading]             = useState(true);
+    const [logoutConfirm, setLogoutConfirm] = useState(false);
+
+    const askLogout = useCallback(() => setLogoutConfirm(true), []);
 
     const activeConv = conversations.find((c) => c.id === activeId) || null;
 
@@ -56,6 +60,34 @@ export default function Chat() {
             console.warn('[push] auto re-subscribe failed:', err.message);
         });
     }, []);
+
+    // On small screens, intercept the browser back button so it returns to the
+    // conversation list instead of leaving the app. Pushes a marker entry while
+    // a chat is open; on popstate, clears the active chat and reopens the list.
+    useEffect(() => {
+        if (typeof window === 'undefined') return;
+        if (!activeId) return;
+        const mql = window.matchMedia('(max-width: 767px)');
+        if (!mql.matches) return;
+
+        const MARKER = { chatOpen: true };
+        window.history.pushState(MARKER, '');
+
+        const onPop = () => {
+            setActiveId(null);
+            setSidebarOpen(true);
+        };
+        window.addEventListener('popstate', onPop);
+
+        return () => {
+            window.removeEventListener('popstate', onPop);
+            // If the marker is still on top (chat closed via UI, not back button),
+            // pop it so the history stack doesn't grow on every open/close cycle.
+            if (window.history.state && window.history.state.chatOpen) {
+                window.history.back();
+            }
+        };
+    }, [activeId]);
 
     // Service worker tells us which conversation to open when a push notification
     // is clicked while the page is already open.
@@ -224,7 +256,7 @@ export default function Chat() {
                 onSelectConversation={openConversation}
                 onSelectUser={openChatWithUser}
                 onToggleFavorite={toggleFavorite}
-                onLogout={logout}
+                onLogout={askLogout}
                 open={sidebarOpen}
                 onClose={() => setSidebarOpen(false)}
             />
@@ -261,6 +293,19 @@ export default function Chat() {
                 )}
             </main>
             </div>
+
+            <ConfirmDialog
+                open={logoutConfirm}
+                title="Log out?"
+                message="You'll need to sign in again to keep chatting."
+                confirmLabel="Log out"
+                danger
+                onCancel={() => setLogoutConfirm(false)}
+                onConfirm={() => {
+                    setLogoutConfirm(false);
+                    logout();
+                }}
+            />
         </div>
     );
 }
