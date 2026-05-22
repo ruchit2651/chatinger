@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import toast from 'react-hot-toast';
 import { formatTime } from '../utils/formatTime.js';
-import { downloadFile, downloadText } from '../utils/download.js';
+import { downloadFile } from '../utils/download.js';
 
 const QUICK_REACTIONS = ['👍', '❤️', '😂', '😮', '😢', '🙏'];
 
@@ -106,24 +106,26 @@ export default function MessageBubble({
         }
     };
 
-    const handleDownload = async () => {
+    const handleCopy = async () => {
         setMenuOpen(false);
-        // Save the text body as a .txt (skip when the message is attachment-only).
-        if (message.message) {
-            const stamp = new Date(message.created_at || Date.now())
-                .toISOString()
-                .replace(/[:.]/g, '-')
-                .slice(0, 19);
-            downloadText(message.message, `chatinger-message-${stamp}.txt`);
-        }
-        // Then save the attachment too, if any.
-        if (message.attachment_url) {
-            await downloadFile(message.attachment_url, message.attachment_name || 'download');
+        if (!message.message) return;
+        try {
+            await navigator.clipboard.writeText(message.message);
+            toast.success('Copied');
+        } catch {
+            toast.error('Copy failed');
         }
     };
 
-    const canDownload = !!message.message || !!message.attachment_url;
-    const canShare    = canDownload;
+    const handleDownload = async () => {
+        setMenuOpen(false);
+        if (!message.attachment_url) return;
+        await downloadFile(message.attachment_url, message.attachment_name || 'download');
+    };
+
+    const canCopy     = !!message.message;
+    const canDownload = !!message.attachment_url;
+    const canShare    = canCopy || canDownload;
 
     // Aggregate reactions by emoji for display.
     const reactionGroups = (message.reactions || []).reduce((acc, r) => {
@@ -204,6 +206,14 @@ export default function MessageBubble({
                                         Share
                                     </button>
                                 )}
+                                {canCopy && (
+                                    <button
+                                        onClick={handleCopy}
+                                        className="block w-full text-left px-3 py-1.5 hover:bg-slate-50 dark:hover:bg-slate-600 text-slate-700 dark:text-slate-200 whitespace-nowrap"
+                                    >
+                                        Copy
+                                    </button>
+                                )}
                                 {canDownload && (
                                     <button
                                         onClick={handleDownload}
@@ -214,7 +224,7 @@ export default function MessageBubble({
                                 )}
                                 {mine && (
                                     <>
-                                        {(canShare || canDownload) && (
+                                        {(canShare || canCopy || canDownload) && (
                                             <div className="h-px bg-slate-200 dark:bg-slate-600" />
                                         )}
                                         <button
