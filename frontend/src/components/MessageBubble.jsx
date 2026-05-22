@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
+import toast from 'react-hot-toast';
 import { formatTime } from '../utils/formatTime.js';
-import { downloadFile } from '../utils/download.js';
+import { downloadFile, downloadText } from '../utils/download.js';
 
 const QUICK_REACTIONS = ['👍', '❤️', '😂', '😮', '😢', '🙏'];
 
@@ -69,6 +70,61 @@ export default function MessageBubble({
         await onReact?.(message.id, emoji);
     };
 
+    // Build the shareable / downloadable text for this message. Combines the
+    // text body with the attachment URL (when present) on its own line.
+    const buildShareText = () => {
+        const lines = [];
+        if (message.message) lines.push(message.message);
+        if (message.attachment_url) {
+            const label = message.attachment_name || 'Attachment';
+            lines.push(`${label}: ${message.attachment_url}`);
+        }
+        return lines.join('\n\n');
+    };
+
+    const handleShare = async () => {
+        setMenuOpen(false);
+        const text = buildShareText();
+        if (!text) return;
+
+        // Prefer the native share sheet (mobile + some desktop browsers).
+        if (navigator.share) {
+            try {
+                await navigator.share({ text });
+                return;
+            } catch (err) {
+                if (err?.name === 'AbortError') return;
+                // Fall through to clipboard on any other failure.
+            }
+        }
+
+        try {
+            await navigator.clipboard.writeText(text);
+            toast.success('Copied to clipboard');
+        } catch {
+            toast.error('Sharing not supported on this device');
+        }
+    };
+
+    const handleDownload = async () => {
+        setMenuOpen(false);
+        // Save the text body as a .txt (skip when the message is attachment-only).
+        if (message.message) {
+            const stamp = new Date(message.created_at || Date.now())
+                .toISOString()
+                .replace(/[:.]/g, '-')
+                .slice(0, 19);
+            downloadText(message.message, `chatinger-message-${stamp}.txt`);
+        }
+        // Then save the attachment too, if any.
+        if (message.attachment_url) {
+            await downloadFile(message.attachment_url, message.attachment_name || 'download');
+        }
+    };
+
+    const canDownload = !!message.message || !!message.attachment_url;
+    const canShare    = canDownload;
+
     // Aggregate reactions by emoji for display.
     const reactionGroups = (message.reactions || []).reduce((acc, r) => {
         acc[r.emoji] = acc[r.emoji] || { emoji: r.emoji, count: 0, mine: false, userIds: [] };
@@ -115,16 +171,14 @@ export default function MessageBubble({
                         >
                             ↩
                         </button>
-                        {mine && (
-                            <button
-                                onClick={() => setMenuOpen((v) => !v)}
-                                className="bg-white dark:bg-slate-700 border border-slate-200 dark:border-slate-600 rounded-full w-7 h-7 text-xs flex items-center justify-center shadow-sm hover:bg-slate-50 dark:hover:bg-slate-600"
-                                title="More"
-                                aria-label="More"
-                            >
-                                ⋯
-                            </button>
-                        )}
+                        <button
+                            onClick={() => setMenuOpen((v) => !v)}
+                            className="bg-white dark:bg-slate-700 border border-slate-200 dark:border-slate-600 rounded-full w-7 h-7 text-xs flex items-center justify-center shadow-sm hover:bg-slate-50 dark:hover:bg-slate-600"
+                            title="More"
+                            aria-label="More"
+                        >
+                            ⋯
+                        </button>
 
                         {reactBarOpen && (
                             <div className={`absolute top-8 ${mine ? 'right-0' : 'left-0'} bg-white dark:bg-slate-700 border border-slate-200 dark:border-slate-600 rounded-full px-2 py-1 shadow-md flex items-center gap-1`}>
@@ -140,23 +194,46 @@ export default function MessageBubble({
                             </div>
                         )}
 
-                        {menuOpen && mine && (
-                            <div className={`absolute top-8 ${mine ? 'right-0' : 'left-0'} bg-white dark:bg-slate-700 border border-slate-200 dark:border-slate-600 rounded-md shadow-md text-sm overflow-hidden`}>
-                                <button
-                                    onClick={startEdit}
-                                    className="block w-full text-left px-3 py-1.5 hover:bg-slate-50 dark:hover:bg-slate-600 text-slate-700 dark:text-slate-200 whitespace-nowrap"
-                                >
-                                    Edit
-                                </button>
-                                <button
-                                    onClick={() => {
-                                        setMenuOpen(false);
-                                        onDelete?.(message.id);
-                                    }}
-                                    className="block w-full text-left px-3 py-1.5 hover:bg-slate-50 dark:hover:bg-slate-600 text-red-600 dark:text-red-400 whitespace-nowrap"
-                                >
-                                    Delete
-                                </button>
+                        {menuOpen && (
+                            <div className={`absolute top-8 ${mine ? 'right-0' : 'left-0'} bg-white dark:bg-slate-700 border border-slate-200 dark:border-slate-600 rounded-md shadow-md text-sm overflow-hidden min-w-[8rem]`}>
+                                {canShare && (
+                                    <button
+                                        onClick={handleShare}
+                                        className="block w-full text-left px-3 py-1.5 hover:bg-slate-50 dark:hover:bg-slate-600 text-slate-700 dark:text-slate-200 whitespace-nowrap"
+                                    >
+                                        Share
+                                    </button>
+                                )}
+                                {canDownload && (
+                                    <button
+                                        onClick={handleDownload}
+                                        className="block w-full text-left px-3 py-1.5 hover:bg-slate-50 dark:hover:bg-slate-600 text-slate-700 dark:text-slate-200 whitespace-nowrap"
+                                    >
+                                        Download
+                                    </button>
+                                )}
+                                {mine && (
+                                    <>
+                                        {(canShare || canDownload) && (
+                                            <div className="h-px bg-slate-200 dark:bg-slate-600" />
+                                        )}
+                                        <button
+                                            onClick={startEdit}
+                                            className="block w-full text-left px-3 py-1.5 hover:bg-slate-50 dark:hover:bg-slate-600 text-slate-700 dark:text-slate-200 whitespace-nowrap"
+                                        >
+                                            Edit
+                                        </button>
+                                        <button
+                                            onClick={() => {
+                                                setMenuOpen(false);
+                                                onDelete?.(message.id);
+                                            }}
+                                            className="block w-full text-left px-3 py-1.5 hover:bg-slate-50 dark:hover:bg-slate-600 text-red-600 dark:text-red-400 whitespace-nowrap"
+                                        >
+                                            Delete
+                                        </button>
+                                    </>
+                                )}
                             </div>
                         )}
                     </div>

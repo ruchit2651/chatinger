@@ -26,3 +26,19 @@ export async function downloadFile(url, filename = 'download') {
         toast.error(`Download failed: ${err.message}`);
     }
 }
+
+/**
+ * Save an in-memory string as a downloadable file. Used for "download message"
+ * actions where the text content lives in JS and never came from a URL.
+ */
+export function downloadText(text, filename = 'message.txt') {
+    const blob = new Blob([text], { type: 'text/plain;charset=utf-8' });
+    const objectUrl = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = objectUrl;
+    a.download = filename;
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    setTimeout(() => URL.revokeObjectURL(objectUrl), 0);
+}
