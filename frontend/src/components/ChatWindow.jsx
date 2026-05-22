@@ -4,7 +4,6 @@ import MessageBubble from './MessageBubble.jsx';
 import MessageInput from './MessageInput.jsx';
 import TypingIndicator from './TypingIndicator.jsx';
 import Avatar from './Avatar.jsx';
-import ConfirmDialog from './ConfirmDialog.jsx';
 import { useAuth } from '../context/AuthContext.jsx';
 import { useSocket } from '../context/SocketContext.jsx';
 import {
@@ -18,6 +17,7 @@ import {
     addReaction,
     removeReaction,
 } from '../api/reactions.js';
+import { getHidden, hideMessages } from '../utils/hiddenMessages.js';
 
 const TYPING_TIMEOUT = 2500;
 
@@ -39,7 +39,9 @@ export default function ChatWindow({
     const [scrolledUp, setScrolledUp] = useState(false);
     const [newCount, setNewCount]     = useState(0);  // unread arrivals while scrolled up
     const [selectedIds, setSelectedIds]   = useState(() => new Set());
-    const [bulkDeleteOpen, setBulkDeleteOpen] = useState(false);
+    const [hiddenIds, setHiddenIds]       = useState(() => getHidden(user.id));
+    // Delete dialog state: { open, ids: number[], canEveryone: boolean }
+    const [deleteDialog, setDeleteDialog] = useState({ open: false, ids: [], canEveryone: false });
     const selectionMode = selectedIds.size > 0;
 
     const scrollRef = useRef(null);
@@ -69,6 +71,21 @@ export default function ChatWindow({
     }, []);
 
     const conversationId = conversation.id;
+
+    // Refresh local hide-list when the signed-in user changes (logout / login
+    // as a different account in the same tab).
+    useEffect(() => {
+        setHiddenIds(getHidden(user.id));
+    }, [user.id]);
+
+    // Visible messages = everything except the ones the current user has
+    // chosen to "delete for me" locally. Reply quotes still need to look up
+    // the original (it's just hidden from the main list), so messagesById is
+    // built from the unfiltered set.
+    const visibleMessages = useMemo(
+        () => messages.filter((m) => !hiddenIds.has(m.id)),
+        [messages, hiddenIds],
+    );
 
     // Index by id for O(1) reply-quote lookup.
     const messagesById = useMemo(() => {
@@ -245,16 +262,6 @@ export default function ChatWindow({
         setSelectedIds(new Set());
     }, []);
 
-    // Count of selected messages that are mine and not already deleted — only
-    // these are eligible for bulk delete.
-    const deletableCount = useMemo(() => {
-        let n = 0;
-        for (const m of messages) {
-            if (selectedIds.has(m.id) && m.sender_id === user.id && !m.deleted_at) n++;
-        }
-        return n;
-    }, [messages, selectedIds, user.id]);
-
     const handleBulkShare = useCallback(async () => {
         // Preserve message order in the chat, not click order.
         const blocks = messages
@@ -292,29 +299,13 @@ export default function ChatWindow({
         }
     }, [messages, selectedIds, exitSelection]);
 
-    const handleBulkDelete = useCallback(async () => {
-        setBulkDeleteOpen(false);
+    const handleBulkDelete = useCallback(() => {
         const ids = messages
-            .filter((m) => selectedIds.has(m.id) && m.sender_id === user.id && !m.deleted_at)
+            .filter((m) => selectedIds.has(m.id) && !m.deleted_at)
             .map((m) => m.id);
         if (ids.length === 0) return;
-        try {
-            const results = await Promise.allSettled(ids.map((id) => deleteMessage(id)));
-            const updates = new Map();
-            results.forEach((r, i) => {
-                if (r.status === 'fulfilled') updates.set(ids[i], r.value);
-            });
-            setMessages((prev) =>
-                prev.map((m) => (updates.has(m.id) ? { ...m, ...updates.get(m.id) } : m))
-            );
-            const failed = results.filter((r) => r.status === 'rejected').length;
-            if (failed > 0) toast.error(`${failed} message${failed === 1 ? '' : 's'} couldn't be deleted`);
-            else toast.success(`Deleted ${ids.length}`);
-            exitSelection();
-        } catch (err) {
-            toast.error(err.message);
-        }
-    }, [messages, selectedIds, user.id, exitSelection]);
+        askDelete(ids);
+    }, [messages, selectedIds, askDelete]);
 
     const handleSend = useCallback(
         async (text, extra = {}) => {
@@ -344,15 +335,56 @@ export default function ChatWindow({
         }
     }, []);
 
-    const handleDelete = useCallback(async (id) => {
-        if (!confirm('Delete this message?')) return;
+    const askDelete = useCallback(
+        (ids) => {
+            // "Delete for everyone" is only offered when every target message
+            // is one of mine. Anything else (received messages, or a mix) can
+            // only be hidden locally.
+            const allMine = ids.every((id) => {
+                const m = messagesById.get(id);
+                return m && m.sender_id === user.id && !m.deleted_at;
+            });
+            setDeleteDialog({ open: true, ids, canEveryone: allMine });
+        },
+        [messagesById, user.id],
+    );
+
+    const closeDeleteDialog = useCallback(() => {
+        setDeleteDialog((d) => ({ ...d, open: false }));
+    }, []);
+
+    const doDeleteForMe = useCallback(() => {
+        const ids = deleteDialog.ids;
+        closeDeleteDialog();
+        if (ids.length === 0) return;
+        setHiddenIds(hideMessages(user.id, ids));
+        setSelectedIds(new Set());
+        toast.success(`Deleted ${ids.length} for you`);
+    }, [deleteDialog.ids, closeDeleteDialog, user.id]);
+
+    const doDeleteForEveryone = useCallback(async () => {
+        const ids = deleteDialog.ids;
+        closeDeleteDialog();
+        if (ids.length === 0) return;
         try {
-            const updated = await deleteMessage(id);
-            setMessages((prev) => prev.map((m) => (m.id === id ? { ...m, ...updated } : m)));
+            const results = await Promise.allSettled(ids.map((id) => deleteMessage(id)));
+            const updates = new Map();
+            results.forEach((r, i) => {
+                if (r.status === 'fulfilled') updates.set(ids[i], r.value);
+            });
+            setMessages((prev) =>
+                prev.map((m) => (updates.has(m.id) ? { ...m, ...updates.get(m.id) } : m)),
+            );
+            const failed = results.filter((r) => r.status === 'rejected').length;
+            if (failed > 0) toast.error(`${failed} message${failed === 1 ? '' : 's'} couldn't be deleted`);
+            else toast.success(`Deleted ${ids.length} for everyone`);
+            setSelectedIds(new Set());
         } catch (err) {
             toast.error(err.message);
         }
-    }, []);
+    }, [deleteDialog.ids, closeDeleteDialog]);
+
+    const handleDelete = useCallback((id) => askDelete([id]), [askDelete]);
 
     const handleReact = useCallback(async (messageId, emoji) => {
         const msg = messagesById.get(messageId);
@@ -405,16 +437,10 @@ export default function ChatWindow({
                             <ShareIcon />
                         </button>
                         <button
-                            onClick={() => {
-                                if (deletableCount === 0) {
-                                    toast.error('You can only delete messages you sent');
-                                    return;
-                                }
-                                setBulkDeleteOpen(true);
-                            }}
+                            onClick={handleBulkDelete}
                             className="w-9 h-9 rounded-full flex items-center justify-center text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/30 transition"
                             aria-label="Delete selected"
-                            title={deletableCount === 0 ? 'You can only delete your own messages' : `Delete ${deletableCount}`}
+                            title={`Delete ${selectedIds.size}`}
                         >
                             <TrashIcon />
                         </button>
@@ -454,12 +480,12 @@ export default function ChatWindow({
                     <div className="h-full flex items-center justify-center text-slate-500 dark:text-slate-400 text-sm">
                         Loading messages...
                     </div>
-                ) : messages.length === 0 ? (
+                ) : visibleMessages.length === 0 ? (
                     <div className="h-full flex items-center justify-center text-slate-500 dark:text-slate-400 text-sm">
                         Say hello to {other.username} 👋
                     </div>
                 ) : (
-                    messages.map((m) => (
+                    visibleMessages.map((m) => (
                         <div
                             key={m.id}
                             ref={(node) => {
@@ -517,19 +543,77 @@ export default function ChatWindow({
                 conversationId={conversationId}
             />
 
-            <ConfirmDialog
-                open={bulkDeleteOpen}
-                title={`Delete ${deletableCount} message${deletableCount === 1 ? '' : 's'}?`}
-                message={
-                    deletableCount < selectedIds.size
-                        ? "You can only delete messages you sent — the rest will be skipped."
-                        : "This can't be undone."
-                }
-                confirmLabel="Delete"
-                danger
-                onCancel={() => setBulkDeleteOpen(false)}
-                onConfirm={handleBulkDelete}
+            <DeleteDialog
+                open={deleteDialog.open}
+                count={deleteDialog.ids.length}
+                canEveryone={deleteDialog.canEveryone}
+                onCancel={closeDeleteDialog}
+                onForMe={doDeleteForMe}
+                onForEveryone={doDeleteForEveryone}
             />
+        </div>
+    );
+}
+
+/**
+ * Delete prompt offering "Delete for me" and (when allowed) "Delete for
+ * everyone". Used for both the single-message delete and the bulk delete.
+ * Esc cancels.
+ */
+function DeleteDialog({ open, count, canEveryone, onCancel, onForMe, onForEveryone }) {
+    useEffect(() => {
+        if (!open) return;
+        const onKey = (e) => {
+            if (e.key === 'Escape') onCancel?.();
+        };
+        document.addEventListener('keydown', onKey);
+        return () => document.removeEventListener('keydown', onKey);
+    }, [open, onCancel]);
+
+    if (!open) return null;
+
+    const noun = count === 1 ? 'message' : 'messages';
+
+    return (
+        <div
+            className="fixed inset-0 z-[60] flex items-center justify-center p-4 bg-black/50"
+            onClick={onCancel}
+        >
+            <div
+                onClick={(e) => e.stopPropagation()}
+                className="w-full max-w-xs bg-white dark:bg-slate-800 rounded-2xl shadow-xl p-5 space-y-3"
+            >
+                <h3 className="text-base font-semibold text-slate-800 dark:text-slate-100">
+                    Delete {count} {noun}?
+                </h3>
+                <p className="text-sm text-slate-600 dark:text-slate-300">
+                    {canEveryone
+                        ? "Deleting for everyone removes the message from both sides. Deleting for me hides it only on this device."
+                        : "This will only hide the message on your side."}
+                </p>
+                <div className="flex flex-col gap-2 pt-1">
+                    {canEveryone && (
+                        <button
+                            onClick={onForEveryone}
+                            className="w-full py-2 rounded-lg bg-red-600 hover:bg-red-700 text-white font-medium transition"
+                        >
+                            Delete for everyone
+                        </button>
+                    )}
+                    <button
+                        onClick={onForMe}
+                        className="w-full py-2 rounded-lg bg-slate-100 dark:bg-slate-700 hover:bg-slate-200 dark:hover:bg-slate-600 text-slate-700 dark:text-slate-200 font-medium transition"
+                    >
+                        Delete for me
+                    </button>
+                    <button
+                        onClick={onCancel}
+                        className="w-full py-1 text-sm text-slate-500 dark:text-slate-400 hover:text-slate-700 dark:hover:text-slate-200 transition"
+                    >
+                        Cancel
+                    </button>
+                </div>
+            </div>
         </div>
     );
 }

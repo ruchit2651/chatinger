@@ -258,26 +258,24 @@ export default function MessageBubble({
                                 >
                                     Select
                                 </button>
+                                <div className="h-px bg-slate-200 dark:bg-slate-600" />
                                 {mine && (
-                                    <>
-                                        <div className="h-px bg-slate-200 dark:bg-slate-600" />
-                                        <button
-                                            onClick={startEdit}
-                                            className="block w-full text-left px-3 py-1.5 hover:bg-slate-50 dark:hover:bg-slate-600 text-slate-700 dark:text-slate-200 whitespace-nowrap"
-                                        >
-                                            Edit
-                                        </button>
-                                        <button
-                                            onClick={() => {
-                                                setMenuOpen(false);
-                                                onDelete?.(message.id);
-                                            }}
-                                            className="block w-full text-left px-3 py-1.5 hover:bg-slate-50 dark:hover:bg-slate-600 text-red-600 dark:text-red-400 whitespace-nowrap"
-                                        >
-                                            Delete
-                                        </button>
-                                    </>
+                                    <button
+                                        onClick={startEdit}
+                                        className="block w-full text-left px-3 py-1.5 hover:bg-slate-50 dark:hover:bg-slate-600 text-slate-700 dark:text-slate-200 whitespace-nowrap"
+                                    >
+                                        Edit
+                                    </button>
                                 )}
+                                <button
+                                    onClick={() => {
+                                        setMenuOpen(false);
+                                        onDelete?.(message.id);
+                                    }}
+                                    className="block w-full text-left px-3 py-1.5 hover:bg-slate-50 dark:hover:bg-slate-600 text-red-600 dark:text-red-400 whitespace-nowrap"
+                                >
+                                    Delete
+                                </button>
                             </div>
                         )}
                     </div>

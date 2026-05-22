@@ -179,7 +179,7 @@ exports.editMessage = async (req, res, next) => {
     }
 };
 
-/** DELETE /api/messages/:id — soft-delete (owner only). */
+/** DELETE /api/messages/:id — soft-delete (owner only, both sides see tombstone). */
 exports.deleteMessage = async (req, res, next) => {
     try {
         const me = req.user.id;
