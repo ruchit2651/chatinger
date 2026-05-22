@@ -14,5 +14,15 @@ export const requestLogin = (payload) =>
 export const verifyLogin  = (payload) =>
     api.post('/auth/login/verify', payload).then((r) => r.data);
 
+// Forgot-password is a three-step flow: request emails an OTP; verify trades
+// the OTP for a short-lived reset token; reset accepts that token plus the
+// new password and returns { user, token }.
+export const requestPasswordReset = (payload) =>
+    api.post('/auth/password/request', payload).then((r) => r.data);
+export const verifyPasswordReset  = (payload) =>
+    api.post('/auth/password/verify', payload).then((r) => r.data);
+export const resetPassword        = (payload) =>
+    api.post('/auth/password/reset', payload).then((r) => r.data);
+
 export const me       = ()        => api.get('/auth/me').then((r) => r.data);
 export const updateMe = (payload) => api.patch('/auth/me', payload).then((r) => r.data);

@@ -1,5 +1,7 @@
 const bcrypt = require('bcrypt');
+const jwt = require('jsonwebtoken');
 const supabase = require('../config/supabase');
+const env = require('../config/env');
 const { signToken } = require('../utils/jwt');
 const otp = require('../utils/otp');
 const { sendOtp, sendWelcome } = require('../utils/email');
@@ -242,6 +244,122 @@ exports.verifyLogin = async (req, res, next) => {
             .maybeSingle();
         if (error) throw error;
         if (!user) return res.status(401).json({ error: 'Account not found' });
+
+        const token = signToken({ id: user.id, username: user.username, email: user.email });
+        res.json({ user: publicUser(user), token });
+    } catch (err) {
+        next(err);
+    }
+};
+
+const PASSWORD_RESET_TOKEN_TTL = '15m';
+
+/**
+ * POST /api/auth/password/request
+ * Step 1 of forgot-password. If the email belongs to an account, email a
+ * 6-digit OTP. We respond with the same success message either way to avoid
+ * leaking which addresses are registered.
+ */
+exports.requestPasswordReset = async (req, res, next) => {
+    try {
+        const { email: rawEmail } = req.body || {};
+        if (!rawEmail) {
+            return res.status(400).json({ error: 'email is required' });
+        }
+        const email = normalizeEmail(rawEmail);
+
+        const { data: user, error } = await supabase
+            .from('users')
+            .select('id')
+            .eq('email', email)
+            .maybeSingle();
+        if (error) throw error;
+
+        if (!user) {
+            return res.json({ ok: true, message: 'If that email exists, a code has been sent' });
+        }
+
+        const code = otp.generate();
+        await otp.create({ email, purpose: 'reset', code });
+
+        try {
+            await sendOtpWithTimeout({ to: email, code, purpose: 'reset' });
+        } catch (err) {
+            // eslint-disable-next-line no-console
+            console.error('Failed to send reset OTP:', err.message);
+            // eslint-disable-next-line no-console
+            console.log(`[otp:fallback] reset code for ${email}: ${code}`);
+            return res.status(502).json({ error: `Couldn't send the verification email: ${err.message}` });
+        }
+
+        res.json({ ok: true, message: 'Verification code sent to your email' });
+    } catch (err) {
+        next(err);
+    }
+};
+
+/**
+ * POST /api/auth/password/verify
+ * Step 2 of forgot-password. Verifies the OTP and issues a short-lived
+ * reset token (15m). The client passes that token to /password/reset.
+ */
+exports.verifyPasswordReset = async (req, res, next) => {
+    try {
+        const { email: rawEmail, code } = req.body || {};
+        if (!rawEmail || !code) {
+            return res.status(400).json({ error: 'email and code are required' });
+        }
+        const email = normalizeEmail(rawEmail);
+
+        const v = await otp.verify({ email, purpose: 'reset', code });
+        if (!v.ok) return res.status(v.status).json({ error: v.error });
+
+        const resetToken = jwt.sign(
+            { email, scope: 'password_reset' },
+            env.JWT_SECRET,
+            { expiresIn: PASSWORD_RESET_TOKEN_TTL },
+        );
+
+        res.json({ ok: true, resetToken });
+    } catch (err) {
+        next(err);
+    }
+};
+
+/**
+ * POST /api/auth/password/reset
+ * Step 3 of forgot-password. Takes the reset token from /password/verify
+ * plus the new password, and updates the user row.
+ */
+exports.resetPassword = async (req, res, next) => {
+    try {
+        const { resetToken, password } = req.body || {};
+        if (!resetToken || !password) {
+            return res.status(400).json({ error: 'resetToken and password are required' });
+        }
+        if (password.length < 6) {
+            return res.status(400).json({ error: 'password must be at least 6 characters' });
+        }
+
+        let payload;
+        try {
+            payload = jwt.verify(resetToken, env.JWT_SECRET);
+        } catch {
+            return res.status(401).json({ error: 'Reset link expired. Start over.' });
+        }
+        if (payload.scope !== 'password_reset' || !payload.email) {
+            return res.status(401).json({ error: 'Invalid reset token' });
+        }
+
+        const hash = await bcrypt.hash(password, SALT_ROUNDS);
+        const { data: user, error } = await supabase
+            .from('users')
+            .update({ password: hash })
+            .eq('email', payload.email)
+            .select(PROFILE_COLUMNS)
+            .maybeSingle();
+        if (error) throw error;
+        if (!user) return res.status(404).json({ error: 'Account not found' });
 
         const token = signToken({ id: user.id, username: user.username, email: user.email });
         res.json({ user: publicUser(user), token });

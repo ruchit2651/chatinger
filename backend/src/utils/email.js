@@ -78,6 +78,7 @@ exports.sendOtp = async ({ to, code, purpose }) => {
     const purposeText =
         purpose === 'register' ? 'create your account' :
         purpose === 'login'    ? 'sign in' :
+        purpose === 'reset'    ? 'reset your password' :
         'verify your email';
 
     const subject = `${APP} verification code: ${code}`;
