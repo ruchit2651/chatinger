@@ -299,13 +299,20 @@ export default function ChatWindow({
         }
     }, [messages, selectedIds, exitSelection]);
 
+    // Bulk delete from the selection toolbar always hides the messages on
+    // this side only — never tombstones for everyone, even when every target
+    // is one of mine. The per-message ⋯ menu is where "Delete for everyone"
+    // lives, because that's a destructive choice we want to confirm one
+    // message at a time.
     const handleBulkDelete = useCallback(() => {
         const ids = messages
             .filter((m) => selectedIds.has(m.id) && !m.deleted_at)
             .map((m) => m.id);
         if (ids.length === 0) return;
-        askDelete(ids);
-    }, [messages, selectedIds, askDelete]);
+        setHiddenIds(hideMessages(user.id, ids));
+        setSelectedIds(new Set());
+        toast.success(`Deleted ${ids.length} for you`);
+    }, [messages, selectedIds, user.id]);
 
     const handleSend = useCallback(
         async (text, extra = {}) => {
