@@ -402,7 +402,7 @@ export default function ChatWindow({
                             aria-label="Share selected"
                             title="Share"
                         >
-                            <span className="text-lg leading-none">⤴</span>
+                            <ShareIcon />
                         </button>
                         <button
                             onClick={() => setBulkDeleteOpen(true)}
@@ -411,7 +411,7 @@ export default function ChatWindow({
                             aria-label="Delete selected"
                             title={deletableCount === 0 ? 'You can only delete your own messages' : `Delete ${deletableCount}`}
                         >
-                            <span className="text-base leading-none">🗑</span>
+                            <TrashIcon />
                         </button>
                     </>
                 ) : (
@@ -526,5 +526,47 @@ export default function ChatWindow({
                 onConfirm={handleBulkDelete}
             />
         </div>
+    );
+}
+
+function ShareIcon() {
+    return (
+        <svg
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            strokeWidth="2"
+            strokeLinecap="round"
+            strokeLinejoin="round"
+            className="w-5 h-5"
+            aria-hidden="true"
+        >
+            <circle cx="18" cy="5" r="3" />
+            <circle cx="6" cy="12" r="3" />
+            <circle cx="18" cy="19" r="3" />
+            <line x1="8.59" y1="13.51" x2="15.42" y2="17.49" />
+            <line x1="15.41" y1="6.51" x2="8.59" y2="10.49" />
+        </svg>
+    );
+}
+
+function TrashIcon() {
+    return (
+        <svg
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            strokeWidth="2"
+            strokeLinecap="round"
+            strokeLinejoin="round"
+            className="w-5 h-5"
+            aria-hidden="true"
+        >
+            <polyline points="3 6 5 6 21 6" />
+            <path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6" />
+            <path d="M10 11v6" />
+            <path d="M14 11v6" />
+            <path d="M9 6V4a2 2 0 0 1 2-2h2a2 2 0 0 1 2 2v2" />
+        </svg>
     );
 }
