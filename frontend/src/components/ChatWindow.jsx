@@ -405,9 +405,14 @@ export default function ChatWindow({
                             <ShareIcon />
                         </button>
                         <button
-                            onClick={() => setBulkDeleteOpen(true)}
-                            disabled={deletableCount === 0}
-                            className="w-9 h-9 rounded-full flex items-center justify-center text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/30 disabled:opacity-40 disabled:hover:bg-transparent disabled:cursor-not-allowed transition"
+                            onClick={() => {
+                                if (deletableCount === 0) {
+                                    toast.error('You can only delete messages you sent');
+                                    return;
+                                }
+                                setBulkDeleteOpen(true);
+                            }}
+                            className="w-9 h-9 rounded-full flex items-center justify-center text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/30 transition"
                             aria-label="Delete selected"
                             title={deletableCount === 0 ? 'You can only delete your own messages' : `Delete ${deletableCount}`}
                         >
